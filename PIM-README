@@ -25,3 +25,4 @@ The following table compares the energy consumption for our implementation of ea
 
 Please note that the energy consumption for our implementation is based off the "2D_DRAM_example.config" which implements the Micron DDR3-1333_4Gb_8B_x8 memory chip, which has a row-size of 8KB. 
 
+Thanks for your interest! If you have any questions please contact ben.morris@duke.edu !
