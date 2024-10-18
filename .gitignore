@@ -1,0 +1,9 @@
+build/
+log/
+.sconsign.dblite
+*.log
+*.o
+*.fast
+*.debug
+
+
