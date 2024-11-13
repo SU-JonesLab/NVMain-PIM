@@ -36,6 +36,8 @@
 * Racetrack/Domain wall memory support added by Asif Ali Khan in January 2019
 * Email: asif_ali.khan@tu-dresden.de
 *
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #include "MemControl/RTM/RTM.h"
@@ -75,6 +77,7 @@ RTM::RTM( )
     mem_reads = 0;
     mem_writes = 0;
     mem_TRAs = 0; 
+    mem_DRAs = 0;
     mem_oAs = 0;
 
     rb_hits = 0;
@@ -119,6 +122,7 @@ void RTM::RegisterStats( )
     AddStat(mem_reads);
     AddStat(mem_writes);
     AddStat(mem_TRAs);
+    AddStat(mem_DRAs);
     AddStat(mem_oAs);
     AddStat(rb_hits);
     AddStat(rb_miss);
@@ -178,8 +182,11 @@ bool RTM::IssueCommand( NVMainRequest *req )
     }else if(req->type == TRA){
         mem_TRAs++;
         Enqueue(0, req);
-    }else if(req->type == OVERLAPPED_ACTIVATE){
+    }else if(req->type == OA){
         mem_oAs++;
+        Enqueue(0, req);
+    }else if(req->type == DRA){
+        mem_DRAs++;
         Enqueue(0, req);
     }
 
@@ -280,7 +287,7 @@ void RTM::Cycle( ncycle_t steps )
     /* Issue the commands for this transaction. */
     if( nextRequest != NULL )
     {
-        if (nextRequest->type == TRA || nextRequest->type == OVERLAPPED_ACTIVATE)
+        if (nextRequest->type == TRA || nextRequest->type == OA || nextRequest->type == DRA)
             IssuePIMCommands( nextRequest );
         else 
             IssueMemoryCommands( nextRequest );

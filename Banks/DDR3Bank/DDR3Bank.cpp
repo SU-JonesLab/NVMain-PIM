@@ -41,6 +41,9 @@
 *                     Website: http://www.cse.psu.edu/~tzz106 )
 * 
 *   Asif Ali Khan   ( Email: asif_ali.khan@tu-dresden.de
+*
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 * 
 *******************************************************************************/
 
@@ -344,7 +347,7 @@ bool DDR3Bank::OverlappedActivate( NVMainRequest *request )
     nextPowerDown = MAX( nextPowerDown, 
                          GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH );
 
-    /* issue OVERLAPPED_ACTIVATE to the target subarray */
+    /* issue OA to the target subarray */
     bool success = GetChild( request )->IssueCommand( request );
 
     if( success )
@@ -365,20 +368,30 @@ bool DDR3Bank::OverlappedActivate( NVMainRequest *request )
 
 }
 
-bool DDR3Bank::TripleRowActivate( NVMainRequest *request )
+bool DDR3Bank::DoubleRowActivate( NVMainRequest *request )
 {
+    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
     /* sanity check */
     if( nextActivate > GetEventQueue()->GetCurrentCycle() )
     {
-        std::cerr << "NVMain Error: Bank violates ACTIVATION timing constraint!"
+        std::cerr << "NVMain Error: Bank violates DRA timing constraint!"
             << std::endl;
         return false;
     }
-    else if( state != DDR3BANK_OPEN )
+    else if( state != DDR3BANK_CLOSED )
     {
-        std::cerr << "NVMain Error: try to overlapped activate on a bank that is not open!"
-            << std::endl;
-        return false;
+        /*
+         * it means no subarray is active when activeSubArrayQueue is empty.
+         * therefore, the bank state must be idle rather than active. Actually,
+         * there are other conditions that the ACTIVATE cannot be issued. But 
+         * we leave the work for subarray so that we don't check here.
+         */
+        if( activeSubArrayQueue.empty( ) )
+        {
+            std::cerr << "NVMain Error: try to open a bank that is not idle!"
+                << std::endl;
+            return false;
+        }
     }
 
     ncounter_t activateRow, activateSubArray;
@@ -388,7 +401,61 @@ bool DDR3Bank::TripleRowActivate( NVMainRequest *request )
     nextPowerDown = MAX( nextPowerDown, 
                          GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH );
 
-    /* issue TRA to the target subarray */
+    /* issue ACTIVATE to the target subarray */
+    bool success = GetChild( request )->IssueCommand( request );
+
+    if( success )
+    {
+        /* bank-level update */
+        openRow = activateRow;
+        state = DDR3BANK_OPEN;
+        activeSubArrayQueue.push_front( activateSubArray );
+        double_row_activates++;
+    }
+    else
+    {
+        std::cerr << "NVMain Error: Bank " << bankId << " failed to "
+            << "activate the subarray " << activateSubArray << std::endl;
+    }
+
+    return success;
+
+}
+
+bool DDR3Bank::TripleRowActivate( NVMainRequest *request )
+{
+    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
+    /* sanity check */
+    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
+    {
+        std::cerr << "NVMain Error: Bank violates TRA timing constraint!"
+            << std::endl;
+        return false;
+    }
+    else if( state != DDR3BANK_CLOSED )
+    {
+        /*
+         * it means no subarray is active when activeSubArrayQueue is empty.
+         * therefore, the bank state must be idle rather than active. Actually,
+         * there are other conditions that the ACTIVATE cannot be issued. But 
+         * we leave the work for subarray so that we don't check here.
+         */
+        if( activeSubArrayQueue.empty( ) )
+        {
+            std::cerr << "NVMain Error: try to open a bank that is not idle!"
+                << std::endl;
+            return false;
+        }
+    }
+
+    ncounter_t activateRow, activateSubArray;
+    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, &activateSubArray );
+
+    /* update the timing constraints */
+    nextPowerDown = MAX( nextPowerDown, 
+                         GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH );
+
+    /* issue ACTIVATE to the target subarray */
     bool success = GetChild( request )->IssueCommand( request );
 
     if( success )
@@ -837,7 +904,7 @@ bool DDR3Bank::IsIssuable( NVMainRequest *req, FailReason *reason )
     if( nextCommand != CMD_NOP )
         return false;
       
-    if( req->type == ACTIVATE )
+    if( req->type == ACTIVATE || req->type == TRA || req->type == DRA )
     {
         /* if the bank-level nextActive is not satisfied, cannot issue */
         if( nextActivate > ( GetEventQueue()->GetCurrentCycle() ) 
@@ -856,7 +923,7 @@ bool DDR3Bank::IsIssuable( NVMainRequest *req, FailReason *reason )
             rv = GetChild( req )->IsIssuable( req, reason );
         }
     }
-    else if( req->type == OVERLAPPED_ACTIVATE  || req->type == TRA)
+    else if( req->type == OA )
     {
         if( state != DDR3BANK_OPEN  )
         {
@@ -1017,8 +1084,12 @@ bool DDR3Bank::IssueCommand( NVMainRequest *req )
                 rv = this->Activate( req );
                 break;
 
-            case OVERLAPPED_ACTIVATE:
+            case OA:
                 rv = this->OverlappedActivate( req );
+                break;
+
+            case DRA:
+                rv = this->DoubleRowActivate( req );
                 break;
 
             case TRA:

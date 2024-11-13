@@ -36,7 +36,8 @@
 * Racetrack/Domain wall memory support added by Asif Ali Khan in January 2019
 * Email: asif_ali.khan@tu-dresden.de
 *
-* 
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #ifndef __SUBARRAY_H__
@@ -96,7 +97,9 @@ class SubArray : public NVMObject
     bool Read( NVMainRequest *request );
     bool Write( NVMainRequest *request );
     bool Shift( NVMainRequest *request );
+    bool LocalWrite( NVMainRequest *request );
     bool OverlappedActivate( NVMainRequest *request );
+    bool DoubleRowActivate( NVMainRequest *request );
     bool TripleRowActivate( NVMainRequest *request );
     bool Precharge( NVMainRequest *request );
     bool Refresh( NVMainRequest *request );
@@ -209,7 +212,7 @@ class SubArray : public NVMObject
 
     uint64_t worstCaseEndurance, averageEndurance;
 
-    ncounter_t reads, writes, activates, precharges, refreshes, overlapped_activates, triple_row_activates;
+    ncounter_t reads, writes, activates, precharges, refreshes, overlapped_activates, double_row_activates, triple_row_activates, local_writes;
     ncounter_t idleTimer;
 
     ncounter_t openRow;

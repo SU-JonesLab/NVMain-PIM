@@ -29,6 +29,8 @@
 * Author list: 
 *   Matt Poremba    ( Email: mrp5060 at psu dot edu 
 *                     Website: http://www.cse.psu.edu/~poremba/ )
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #include "MemControl/FRFCFS/FRFCFS.h"
@@ -67,6 +69,7 @@ FRFCFS::FRFCFS( )
 
     mem_reads = 0;
     mem_writes = 0;
+    mem_DRAs=0;
     mem_TRAs = 0; 
     mem_oAs = 0;
 
@@ -111,6 +114,7 @@ void FRFCFS::RegisterStats( )
 {
     AddStat(mem_reads);
     AddStat(mem_writes);
+    AddStat(mem_DRAs);
     AddStat(mem_TRAs);
     AddStat(mem_oAs);
     AddStat(rb_hits);
@@ -165,11 +169,13 @@ bool FRFCFS::IssueCommand( NVMainRequest *req )
         mem_reads++;
     }else if( req->type == WRITE){
         mem_writes++;
-    //Activation based PIM (bfm3)
+    //Activation based PIM 
     }else if(req->type == TRA){
         mem_TRAs++;
-    }else if(req->type == OVERLAPPED_ACTIVATE){
+    }else if(req->type == OA){
         mem_oAs++;
+    }else if(req->type == DRA){
+        mem_DRAs++;
     }
     /*
      *  Return whether the request could be queued. Return false if the queue is full.
@@ -267,8 +273,8 @@ void FRFCFS::Cycle( ncycle_t steps )
 
     /* Issue the commands for this transaction. */
     if( nextRequest != NULL )
-    {   //handle PUM commands (bfm3)
-        if (nextRequest->type == TRA || nextRequest->type == OVERLAPPED_ACTIVATE)
+    {   //handle PUM commands 
+        if (nextRequest->type == DRA || nextRequest->type == TRA || nextRequest->type == OA)
             IssuePIMCommands( nextRequest );
         else
             IssueMemoryCommands( nextRequest );

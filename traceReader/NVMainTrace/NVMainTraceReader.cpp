@@ -29,6 +29,9 @@
 * Author list: 
 *   Matt Poremba    ( Email: mrp5060 at psu dot edu 
 *                     Website: http://www.cse.psu.edu/~poremba/ )
+*
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )  
 *******************************************************************************/
 
 #include "traceReader/NVMainTrace/NVMainTraceReader.h"
@@ -144,11 +147,13 @@ bool NVMainTraceReader::GetNextAccess( TraceLine *nextAccess )
                     operation = READ;
                 else if( field == "W" )
                     operation = WRITE;
-                else if(field =="O")
-                    operation = OVERLAPPED_ACTIVATE;
-                else if(field == "T")
+                else if(field =="O" )
+                    operation = OA;
+                else if (field == "D" )
+                    operation = DRA;
+                else if(field == "T" )
                     operation = TRA;
-                else if(field == "ROWCLONE_PSM")
+                else if(field == "ROWCLONE_PSM" )
                     operation = ROWCLONE_PSM;
                 else
                     std::cout << "Warning: Unknown operation `" 
@@ -251,7 +256,7 @@ bool NVMainTraceReader::GetNextAccess( TraceLine *nextAccess )
 
     linenum++;
 
-    if( operation != READ && operation != WRITE && operation != TRA && operation != OVERLAPPED_ACTIVATE)
+    if( operation != READ && operation != WRITE && operation != TRA && operation != OA && operation != DRA )
         std::cout << "NVMainTraceReader: Unknown Operation: " << operation 
             << "Line number is " << linenum << ". Full Line is \"" << fullLine 
             << "\"" << std::endl;

@@ -38,6 +38,9 @@
 * 
 *   Asif Ali Khan   ( Email: asif_ali.khan@tu-dresden.de
 * 
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
+* 
 *******************************************************************************/
 
 #ifndef __STANDARDRANK_H__
@@ -137,7 +140,7 @@ class StandardRank : public Rank
     ncounter_t actWaitTotal;
     double actWaitAverage;
 
-    ncounter_t reads, writes, overlapped_activates, triple_row_activates;
+    ncounter_t reads, writes, overlapped_activates, double_row_activates, triple_row_activates;
 
     double totalEnergy, backgroundEnergy, activateEnergy, burstEnergy, refreshEnergy;
     double totalPower, backgroundPower, activatePower, burstPower, refreshPower;
@@ -145,6 +148,7 @@ class StandardRank : public Rank
     bool Activate( NVMainRequest *request );
     bool Shift( NVMainRequest *request );
     bool OverlappedActivate( NVMainRequest *request );
+    bool DoubleRowActivate( NVMainRequest *request );
     bool TripleRowActivate( NVMainRequest *request );
 
     bool Read( NVMainRequest *request );

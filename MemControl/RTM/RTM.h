@@ -36,6 +36,8 @@
 * Racetrack/Domain wall memory support added by Asif Ali Khan in January 2019
 * Email: asif_ali.khan@tu-dresden.de
 *
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 
@@ -74,7 +76,7 @@ class RTM : public MemoryController
     /* Stats */
     uint64_t measuredLatencies, measuredQueueLatencies, measuredTotalLatencies;
     double averageLatency, averageQueueLatency, averageTotalLatency;
-    uint64_t mem_reads, mem_writes, mem_TRAs, mem_oAs;
+    uint64_t mem_reads, mem_writes, mem_TRAs, mem_oAs, mem_DRAs;
     uint64_t rb_hits;
     uint64_t rb_miss;
     uint64_t starvation_precharges;

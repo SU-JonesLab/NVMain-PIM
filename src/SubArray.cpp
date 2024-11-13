@@ -41,6 +41,8 @@
 * Racetrack/Domain wall memory support added by Asif Ali Khan in February 2019
 * Email: asif_ali.khan@tu-dresden.de
 * 
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #include "src/SubArray.h"
@@ -131,7 +133,9 @@ SubArray::SubArray( )
     precharges = 0;
     refreshes = 0;
     overlapped_activates = 0;
+    double_row_activates = 0;
     triple_row_activates = 0;
+    local_writes = 0;
 
     actWaits = 0;
     actWaitTotal = 0;
@@ -290,7 +294,9 @@ void SubArray::RegisterStats( )
     AddStat(reads);
     AddStat(writes);
     AddStat(overlapped_activates);
+    AddStat(double_row_activates);
     AddStat(triple_row_activates);
+    AddStat(local_writes);
 
     /* Register these stats only for RaceTrack Memory */
     if( p->MemIsRTM )
@@ -354,7 +360,7 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
     CheckWritePausing( );
     if(  state != SUBARRAY_OPEN )
     {
-        std::cerr << "NVMain Error: try to perform overlapped ACTIVATE on subarray that is not open!"
+        std::cerr << "NVMain Error: try to perform TRA on subarray that is not open!"
             << std::endl;
         return false;
     }
@@ -368,7 +374,7 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
                          GetEventQueue()->GetCurrentCycle() 
                              + MAX( p->tRCD, 0 ) );
 
-    /* send event response back up (bfm3)*/
+    /* send event response back up*/
     GetEventQueue( )->InsertEvent( EventResponse, this, request, 
                     GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH * (numShifts / wordSize) );
 
@@ -396,8 +402,8 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
     else
     {
         /* Flat energy model. */
-        subArrayEnergy += p->Erd / (double)(p->BANKS); //TODO change this to the correct value
-        activeEnergy += p->Erd / (double)(p->BANKS);
+        subArrayEnergy += p->Erd; 
+        activeEnergy += p->Erd;
     }
 
     overlapped_activates++;
@@ -405,8 +411,7 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
     return true;
 }
 
-
-bool SubArray::TripleRowActivate( NVMainRequest *request )
+bool SubArray::DoubleRowActivate(NVMainRequest *request )
 {
     uint64_t activateRow;
 
@@ -415,10 +420,17 @@ bool SubArray::TripleRowActivate( NVMainRequest *request )
     /* Check if we need to cancel or pause a write to service this request. */
     CheckWritePausing( );
 
-
-    if(  state != SUBARRAY_OPEN)
+    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
+    /* sanity check */
+    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
     {
-        std::cerr << "NVMain Error: try to TRA on a subarray that is not open!"
+        std::cerr << "NVMain Error: SubArray violates ACTIVATION timing constraint!"
+            << std::endl;
+        return false;
+    }
+    else if( p->UsePrecharge && state != SUBARRAY_CLOSED )
+    {
+        std::cerr << "NVMain Error: try to open a subarray that is not idle!"
             << std::endl;
         return false;
     }
@@ -426,13 +438,21 @@ bool SubArray::TripleRowActivate( NVMainRequest *request )
     /* Update timing constraints */
     nextPrecharge = MAX( nextPrecharge, 
                          GetEventQueue()->GetCurrentCycle() 
-                             + MAX( p->tRCD, 0 ) );
+                             + MAX( p->tRCD, p->tRAS ) );
+
+    nextRead = MAX( nextRead, 
+                    GetEventQueue()->GetCurrentCycle() 
+                        + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
+
+    nextWrite = MAX( nextWrite, 
+                     GetEventQueue()->GetCurrentCycle() 
+                         + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
 
     nextPowerDown = MAX( nextPowerDown, 
                          GetEventQueue()->GetCurrentCycle() 
-                             + MAX( p->tRCD, 0 ) );
+                             + MAX( p->tRCD, p->tRAS ) );
 
-    /* send event response back up (bfm3)*/
+    /* send event response back up */
     GetEventQueue( )->InsertEvent( EventResponse, this, request, 
                     GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH * (numShifts / wordSize) );
 
@@ -451,17 +471,104 @@ bool SubArray::TripleRowActivate( NVMainRequest *request )
     if( p->EnergyModel == "current" )
     {
         /* DRAM Model */
-        ncycle_t tRC = p->tRAS;
-        //1.44 from AMBIT (bfm3)
-        subArrayEnergy += 1.44*( (p->EIDD0 * tRC) - (p->EIDD3N *tRC) ) / (double)(p->BANKS); //active energy - idle energy
+        ncycle_t tRC = p->tRAS + p->tRP;
 
-        activeEnergy += 1.44*( (p->EIDD0 * tRC) - (p->EIDD3N *tRC) ) / (double)(p->BANKS); //active energy - idle energy
+        subArrayEnergy += 1.22 * ( ( p->EIDD0 * (double)tRC ) 
+                    - ( ( p->EIDD3N * (double)(p->tRAS) )
+                    +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
+
+        activeEnergy += 1.22 * ( ( p->EIDD0 * (double)tRC ) 
+                      - ( ( p->EIDD3N * (double)(p->tRAS) )
+                      +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
     }
     else
     {
         /* Flat energy model. */
-        subArrayEnergy += 1.44*p->Erd / (double)(p->BANKS);
-        activeEnergy += 1.44*p->Erd / (double)(p->BANKS);
+        subArrayEnergy += 1.22 * p->Erd;
+        activeEnergy += 1.22 * p->Erd;
+    }
+
+    double_row_activates++;
+
+    return true;
+}
+
+
+bool SubArray::TripleRowActivate( NVMainRequest *request )
+{
+    uint64_t activateRow;
+
+    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, NULL );
+
+    /* Check if we need to cancel or pause a write to service this request. */
+    CheckWritePausing( );
+
+    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
+    /* sanity check */
+    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
+    {
+        std::cerr << "NVMain Error: SubArray violates ACTIVATION timing constraint!"
+            << std::endl;
+        return false;
+    }
+    else if( p->UsePrecharge && state != SUBARRAY_CLOSED )
+    {
+        std::cerr << "NVMain Error: try to open a subarray that is not idle!"
+            << std::endl;
+        return false;
+    }
+
+    /* Update timing constraints */
+    nextPrecharge = MAX( nextPrecharge, 
+                         GetEventQueue()->GetCurrentCycle() 
+                             + MAX( p->tRCD, p->tRAS ) );
+
+    nextRead = MAX( nextRead, 
+                    GetEventQueue()->GetCurrentCycle() 
+                        + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
+
+    nextWrite = MAX( nextWrite, 
+                     GetEventQueue()->GetCurrentCycle() 
+                         + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
+
+    nextPowerDown = MAX( nextPowerDown, 
+                         GetEventQueue()->GetCurrentCycle() 
+                             + MAX( p->tRCD, p->tRAS ) );
+
+    /* send event response back up */
+    GetEventQueue( )->InsertEvent( EventResponse, this, request, 
+                    GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH * (numShifts / wordSize) );
+
+    /* 
+     * The relative row number is record rather than the absolute row number 
+     * within the subarray
+     */
+    openRow = activateRow;
+
+    state = SUBARRAY_OPEN;
+    writeCycle = false;
+
+    lastActivate = GetEventQueue()->GetCurrentCycle();
+
+    /* Add to bank's total energy. */
+    if( p->EnergyModel == "current" )
+    {
+        /* DRAM Model */
+        ncycle_t tRC = p->tRAS + p->tRP;
+
+        subArrayEnergy += 1.44 * ( ( p->EIDD0 * (double)tRC ) 
+                    - ( ( p->EIDD3N * (double)(p->tRAS) )
+                    +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
+
+        activeEnergy += 1.44 * ( ( p->EIDD0 * (double)tRC ) 
+                      - ( ( p->EIDD3N * (double)(p->tRAS) )
+                      +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
+    }
+    else
+    {
+        /* Flat energy model. */
+        subArrayEnergy += 1.44 * p->Erd;
+        activeEnergy += 1.44 * p->Erd;
     }
 
     triple_row_activates++;
@@ -546,8 +653,8 @@ bool SubArray::Activate( NVMainRequest *request )
     else
     {
         /* Flat energy model. */
-        subArrayEnergy += p->Erd / (double)(p->BANKS);
-        activeEnergy += p->Erd / (double)(p->BANKS);
+        subArrayEnergy += p->Erd;
+        activeEnergy += p->Erd;
     }
 
     activates++;
@@ -708,6 +815,85 @@ bool SubArray::Read( NVMainRequest *request )
     
     return true;
 }
+
+bool SubArray::LocalWrite( NVMainRequest *request )
+{
+    uint64_t writeDBC, writeDomain;
+    ncycle_t writeTimer;
+    ncycle_t encLat = 0, endrLat = 0;
+    ncounter_t numUnchangedBits = 0;
+
+    request->address.GetTranslatedAddress( &writeDBC, &writeDomain, NULL, NULL, NULL, NULL );
+    
+    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
+    /* sanity check */
+    if( nextWrite > GetEventQueue()->GetCurrentCycle() )
+    {
+        std::cerr << "NVMain Error: Subarray violates LOCAL WRITE timing constraint!"
+            << std::endl;
+        return false;
+    }
+    else if( state != SUBARRAY_OPEN )
+    {
+        std::cerr << "NVMain Error: try to write a subarray that is not active!"
+            << std::endl;
+        return false;
+    }
+    else if( writeDBC != openRow )
+    {
+        std::cerr << "NVMain Error: try to write a row that is not opened "
+            << "in a subarray!" << std::endl;
+        return false;
+    }
+    
+    
+    /* Write all bits */
+
+    /* Don't have to worry about pausing or canceling here, this needs to happen in-order with other PIM operations */
+
+    //Let burstcount = 1 for all these timings
+    nextPrecharge = MAX( nextPrecharge, 
+                            GetEventQueue()->GetCurrentCycle() 
+                            + p->tAL + p->tCWD + p->tBURST  + p->tWR );
+
+    nextRead = MAX( nextRead, 
+                    GetEventQueue()->GetCurrentCycle() 
+                            + p->tCWD + p->tBURST + p->tWTR  );
+
+    nextWrite = MAX( nextWrite, 
+                        GetEventQueue()->GetCurrentCycle() 
+                        + MAX( p->tBURST, p->tCCD )  );
+    
+
+    nextPowerDown = MAX( nextPowerDown, nextPrecharge );
+
+    /* Notify owner of write completion as well */
+    GetEventQueue( )->InsertEvent( writeEvent, writeEventTime );
+
+    /* Calculate energy. */
+    if( p->EnergyModel == "current" )
+    {
+        /* DRAM Model. */
+        subArrayEnergy += ( ( p->EIDD4W - p->EIDD3N ) * (double)(p->tBURST) ) / (double)(p->BANKS);
+
+        burstEnergy += ( ( p->EIDD4W - p->EIDD3N ) * (double)(p->tBURST) ) / (double)(p->BANKS);
+    }
+    else
+    {
+        /* Flat energy model. */
+        subArrayEnergy += p->Ewr - p->Ewrpb * numUnchangedBits; // numUnchangedBits = 0
+
+        burstEnergy += p->Ewr;
+    }
+
+    writeCycle = true;
+
+    local_writes++;
+    dataCycles += p->tBURST;
+    
+    return true;
+}
+
 
 /*
  * Write() fulfills the column write function
@@ -1448,7 +1634,7 @@ bool SubArray::IsIssuable( NVMainRequest *req, FailReason *reason )
     if( nextCommand != CMD_NOP )
         return false;
 
-    if( req->type == ACTIVATE  )
+    if( req->type == ACTIVATE  || req->type == TRA || req->type == DRA)
     {
         if( nextActivate > (GetEventQueue()->GetCurrentCycle()) /* if it is too early to open */
             || (p->UsePrecharge && state != SUBARRAY_CLOSED)   /* or, the subarray needs a precharge */
@@ -1470,7 +1656,7 @@ bool SubArray::IsIssuable( NVMainRequest *req, FailReason *reason )
             }
         }
     }
-    else if ( req->type == OVERLAPPED_ACTIVATE || req->type == TRA)
+    else if ( req->type == OA )
     {
         if( state != SUBARRAY_OPEN  /* the subarray is not active */
             || ( p->WritePausing && isWriting && writeRequest->flags & NVMainRequest::FLAG_FORCED ) ) /* or, write can't be paused. */
@@ -1582,8 +1768,11 @@ bool SubArray::IssueCommand( NVMainRequest *req )
             case SHIFT:
                 rv = this->Shift( req );
                 break;
-            case OVERLAPPED_ACTIVATE:
+            case OA:
                 rv = this->OverlappedActivate( req );
+                break;
+            case DRA:
+                rv = this->DoubleRowActivate( req );
                 break;
             case TRA:
                 rv = this->TripleRowActivate( req );

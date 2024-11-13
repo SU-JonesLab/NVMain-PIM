@@ -40,7 +40,10 @@
 *   Tao Zhang       ( Email: tzz106 at cse dot psu dot edu
 *                     Website: http://www.cse.psu.edu/~tzz106 )
 * 
-*   Asif Ali Khan   ( Email: asif_ali.khan@tu-dresden.de
+*   Asif Ali Khan   ( Email: asif_ali.khan@tu-dresden.de )
+* 
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 * 
 *******************************************************************************/
 
@@ -1235,8 +1238,9 @@ bool MemoryController::FindCachedAddress( std::list<NVMainRequest *>& transactio
     *accessibleRequest = NULL;
 
     for( it = transactionQueue.begin(); it != transactionQueue.end(); it++ )
-    {
-        if((*it)->type == TRA || (*it)->type == OVERLAPPED_ACTIVATE)
+    {   
+        // Skip transaction requests that are not READ or WRITE (PIM requests)
+        if((*it)->type == TRA || (*it)->type == OA || (*it)->type == DRA )
             continue;
             
         ncounter_t queueId = GetCommandQueueId( (*it)->address );
@@ -1367,6 +1371,11 @@ bool MemoryController::FindRowBufferHit( std::list<NVMainRequest *>& transaction
 
     for( it = transactionQueue.begin(); it != transactionQueue.end(); it++ )
     {
+
+        // Skip transaction requests that are not READ or WRITE (PIM requests)
+        if((*it)->type == TRA || (*it)->type == OA || (*it)->type == DRA )
+            continue;
+
         ncounter_t rank, bank, row, subarray, col;
         ncounter_t queueId = GetCommandQueueId( (*it)->address );
 
@@ -1590,7 +1599,7 @@ bool MemoryController::DummyPredicate::operator() ( NVMainRequest* /*request*/ )
 
 /**Issue PIM Commands 
  * if bank is open then precharge
- * then add to command queue bfm3 
+ * then add to command queue
  * 
  * 
 */
@@ -1606,7 +1615,7 @@ bool MemoryController::IssuePIMCommands( NVMainRequest *req )
     if(rank != rank2 || bank != bank2 || subarray != subarray2){
         std::cout << "Physical Addresses: " << req->address.GetPhysicalAddress() << " | " << req->address2.GetPhysicalAddress() << "\n";
         std::cout << "Translated Addresses: Ranks " << rank << " | " << rank2 << "\nBanks " << bank << " | " << bank2 << "\nSubarrays " << subarray << " | " << subarray2 << "\n";
-        std::cout << "PIM commands not in same subarray! - throwing exception in src/MemoryController.cpp" << std::endl;
+        std::cout << "PIM command Src/Dst not in same subarray! - throwing exception in src/MemoryController.cpp" << std::endl;
         //Give the opportunity to attach a debugger here.
         #ifndef NDEBUG
             raise( SIGSTOP );
@@ -1617,16 +1626,34 @@ bool MemoryController::IssuePIMCommands( NVMainRequest *req )
 
     ncounter_t muxLevel = static_cast<ncounter_t>(col/p->RBSize);
     ncounter_t queueId = GetCommandQueueId(req->address);
-    //if already active and not correct row then close
-    if( activeSubArray[rank][bank][subarray] && effectiveRow[rank][bank][subarray] != row )
+
+    //If not overlap, the subarray should not be active
+    if( activeSubArray[rank][bank][subarray] && req->type != OA)
         commandQueues[queueId].push_back( MakePrechargeRequest( req ) );
 
-    //add activate 
-    commandQueues[queueId].push_back( MakeActivateRequest( row2, col2, bank2, rank2, subarray2 ));
+    //If overlap, the subarray should be active
+    if(req->type == OA && !activeSubArray[rank][bank][subarray]){
+        commandQueues[queueId].push_back( MakeActivateRequest( req ) );
+    }
+
     //add request
     commandQueues[queueId].push_back( req );
-    //add precharge
-    commandQueues[queueId].push_back( MakePrechargeRequest( req ) );
+    
+    //Reset starvation counter
+    starvationCounter[rank][bank][subarray] = 0;
+    activateQueued[rank][bank] = true;
+
+    //Update the active subarray
+    activeSubArray[rank][bank][subarray] = true;
+    effectiveRow[rank][bank][subarray] = row;
+    effectiveMuxedRow[rank][bank][subarray] = muxLevel;
+
+    // add precharge after overlap activates to close subarray
+    if(req->type == OA){
+        commandQueues[queueId].push_back( MakePrechargeRequest( req ) );
+        activeSubArray[rank][bank][subarray] = false;
+        activateQueued[rank][bank] = false;
+    }
 
     //INTER_BANK ROWCLONE
     //add activate for add
@@ -1698,7 +1725,7 @@ bool MemoryController::IssueMemoryCommands( NVMainRequest *req )
 
     if( !activateQueued[rank][bank] && commandQueues[queueId].empty() )
     {
-        /* Any activate will request the starvation counter */
+        /* Any activate will reset the starvation counter */
         activateQueued[rank][bank] = true;
         activeSubArray[rank][bank][subarray] = true;
         effectiveRow[rank][bank][subarray] = row;
@@ -1746,7 +1773,7 @@ bool MemoryController::IssueMemoryCommands( NVMainRequest *req )
                 || effectiveMuxedRow[rank][bank][subarray] != muxLevel )
             && commandQueues[queueId].empty() )
     {
-        /* Any activate will request the starvation counter */
+        /* Any activate will reset the starvation counter */
         starvationCounter[rank][bank][subarray] = 0;
         activateQueued[rank][bank] = true;
 

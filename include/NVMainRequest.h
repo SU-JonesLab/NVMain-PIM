@@ -34,6 +34,8 @@
 *                     Website: http://www.cse.psu.edu/~poremba/ )
 * 
 *   Asif Ali Khan   ( Email: asif_ali.khan@tu-dresden.de
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 * 
 *******************************************************************************/
 
@@ -69,9 +71,11 @@ enum OpType
     BUS_WRITE,      /* Data bus write burst */ 
     CACHED_READ,    /* Check if read is cached anywhere in hierarchy. */
     CACHED_WRITE,    /* Check if write is cached anywhere in hierarchy. */
-    TRA, /*Triple Row Activate primitive for PIM in DRAM (bfm3)*/
-    OVERLAPPED_ACTIVATE, /*Overlapped Activate primitive for PIM in DRAM (bfm3)*/
-    ROWCLONE_PSM /*Row Clone primitive for PIM in DRAM (bfm3)*/
+    TRA, /*Triple Row Activate primitive for PIM in DRAM/Pinatubo*/
+    DRA, /*Double Row Activate primitive for PIM in DRAM/Pinatubo*/
+    OA, /*Overlapped Activate primitive for PIM in DRAM*/
+    LW, /*Local Write primitive for PIM in DRAM*/
+    ROWCLONE_PSM /*Row Clone PSM primitive for PIM in DRAM (not implemented yet) */
 };
 
 enum MemRequestStatus 
@@ -151,8 +155,8 @@ class NVMainRequest
     { 
     };
 
-    NVMAddress address;            //< Address of request (for PIM requests this is dest (bfm3))
-    NVMAddress address2;           //< Second address of request (for PIM requests this is source(bfm3))
+    NVMAddress address;            //< Address of request (for PIM requests this is dest 
+    NVMAddress address2;           //< Second address of request (for PIM requests this is source
     OpType type;                   //< Operation type of request (read, write, etc)
     BulkCommand bulkCmd;           //< Bulk Commands (i.e., Read+Precharge, Write+Precharge, etc)
     ncounters_t threadId;                  //< Thread ID of issuing application

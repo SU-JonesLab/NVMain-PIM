@@ -4,13 +4,18 @@ This is a README for the Processing In Memory (PIM) extension, which is built on
 
 ## New Command Types
 
-The PIM extension introduces three new command types from the Ambit command set:
+The PIM extension introduces three new command types from the PIM command set:
 
-1. **Overlapped Activate**: This command allows for the activation of a row while another row is already active. This can be useful for cloning the contents of one row to another.
+1. **Overlapped Activate (OA)**: This command allows for the activation of a row while another row is already active. This can be useful for cloning the contents of one row to another.
 
-2. **Triple Row Activate**: This command activates three rows at once. This is meant to perform the majority operation on the 3 elements column-wise, across the row. State is not tracked in this simulator so we model energy and latency.
+2. **Triple Row Activate (TRA)**: This command activates three rows at once. This is meant to perform the majority operation on the 3 elements column-wise, across the row. State is not tracked in this simulator so we model energy and latency.
 
-3. **RowClone_PSM**: This command is intended to clone a row in a PSM (Pipelined Serial Mode) manner. However, this feature is not yet implemented.
+3. **Double Row Activate (DRA)**: This command activates two rows at once. This command can be used in Ambit (DRAM) PIM or Pinatubo (RRAM) PIM.
+    In order to simulate the sequential wordline driver for Pinatubo, need to add tRCD * #DRA to final timing.
+
+4. **Local Write (LW)**: This command writes the contents of the sense amps (SA) back into the address given using local write drivers.
+
+4. **RowClone_PSM**: This command is intended to clone a row in a PSM (Pipelined Serial Mode) manner. However, this feature is not yet implemented.
 
 ## Results
 
@@ -19,9 +24,9 @@ The following table compares the energy consumption for our implementation of ea
 | Operation | Energy Consumption Ambit (nJ/KB) | Energy Consumption Us (nJ/KB) | Percent Difference |
 | --- | --- | --- | --- |
 | NOT | 1.6 | 1.7 |  +6% |
-| AND | 3.2 | 3.59 | +12% |
-| NAND | 4.0 | 4.44 | +11% |
-| XOR | 5.5 | 6.5 | +18% |
+| AND | 3.2 | 3.17 | -1% |
+| NAND | 4.0 | 3.59 | -10% |
+| XOR | 5.5 | 5.24 | -5% |
 
-Please note that the energy consumption for our implementation is based off the "2D_DRAM_example.config" which implements the Micron DDR3-1333_4Gb_8B_x8 memory chip, which has a row-size of 8KB. 
+Please note: The energy consumption for our implementation is based off the "2D_DRAM_example.config" which implements the Micron DDR3-1333_4Gb_8B_x8 memory chip, which has a row-size of 8KB.
 

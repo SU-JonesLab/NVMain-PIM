@@ -29,6 +29,8 @@
 * Author list: 
 *   Matt Poremba    ( Email: mrp5060 at psu dot edu 
 *                     Website: http://www.cse.psu.edu/~poremba/ )
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #include "nvmain.h"
@@ -408,9 +410,9 @@ bool NVMain::IssueCommand( NVMainRequest *request )
         {
             totalWriteRequests++;
         }
-        else if(request->type == TRA || request->type == OVERLAPPED_ACTIVATE || request->type == ROWCLONE_PSM)
+        else if(request->type == TRA || request->type == OA || request->type == DRA)
         {
-            /* Translate address 2 for pim commands (bfm3)*/
+            /* Translate address 2 for pim commands */
             GetDecoder( )->Translate( request->address2.GetPhysicalAddress( ), 
                                 &row, &col, &bank, &rank, &channel, &subarray );
             request->address2.SetTranslatedAddress( row, col, bank, rank, channel, subarray );
@@ -463,7 +465,7 @@ bool NVMain::IssueAtomic( NVMainRequest *request )
         {
             totalWriteRequests++;
         }
-        else if(request->type == TRA || request->type == OVERLAPPED_ACTIVATE)
+        else if(request->type == TRA || request->type == OA || request->type == DRA)
         {
             totalPIMRequests++;
         }

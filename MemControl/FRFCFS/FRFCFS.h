@@ -29,6 +29,8 @@
 * Author list: 
 *   Matt Poremba    ( Email: mrp5060 at psu dot edu 
 *                     Website: http://www.cse.psu.edu/~poremba/ )
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #ifndef __FRFCFS_H__
@@ -65,7 +67,7 @@ class FRFCFS : public MemoryController
     /* Stats */
     uint64_t measuredLatencies, measuredQueueLatencies, measuredTotalLatencies;
     double averageLatency, averageQueueLatency, averageTotalLatency;
-    uint64_t mem_reads, mem_writes, mem_TRAs, mem_oAs;
+    uint64_t mem_reads, mem_writes, mem_DRAs, mem_TRAs, mem_oAs;
     uint64_t rb_hits;
     uint64_t rb_miss;
     uint64_t starvation_precharges;

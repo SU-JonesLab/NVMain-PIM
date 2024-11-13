@@ -29,6 +29,9 @@
 * Author list: 
 *   Matt Poremba    ( Email: mrp5060 at psu dot edu 
 *                     Website: http://www.cse.psu.edu/~poremba/ )
+*
+* PIM support added in 2024 by:
+*   Benjamin Morris ( Email: ben dot morris at duke dot edu )
 *******************************************************************************/
 
 #include <sstream>
@@ -234,7 +237,7 @@ int TraceMain::RunTrace( int argc, char *argv[] )
         request->status = MEM_REQUEST_INCOMPLETE;
         request->owner = (NVMObject *)this;
 
-        if(request->type == ROWCLONE_PSM || request->type == OVERLAPPED_ACTIVATE || request->type == TRA)
+        if(request->type == ROWCLONE_PSM || request->type == OA || request->type == TRA)
         {
             request->address2 = tl->GetAddress2( );
         }
@@ -248,7 +251,8 @@ int TraceMain::RunTrace( int argc, char *argv[] )
             tl->SetLine( tl->GetAddress( ), tl->GetOperation( ), 0, 
                          tl->GetData( ), tl->GetOldData( ), tl->GetThreadId( ) );
 
-        if( request->type != READ && request->type != WRITE && request->type != OVERLAPPED_ACTIVATE && request->type != TRA)
+        // TODO if we keep adding new operations, we should add a function in NVMainRequest to check if valid for trace
+        if( request->type != READ && request->type != WRITE && request->type != OA && request->type != TRA && request->type != DRA )
             std::cout << "traceMain: Unknown Operation: " << request->type 
                 << std::endl;
 
