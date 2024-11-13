@@ -1,3 +1,8 @@
+NVMain-PIM is developed on top of RTSim.
+Please check out the PIM-README if you are interested 
+in simulating PIM in this tool.
+
+
 RTSim is developed on top of the NVMain simulator.
 This original README file of the NVMain nicely explains 
 how to build the simulator and perform a test run.
@@ -255,6 +260,6 @@ Sections
 8/17/2012 - Created first README
 2/8/2017 - Update README for cleanup branch
 3/2/2019 - Added RTSim specific info to the header
-
+10/18/2024 - Added NVMain-PIM specific info to the header
 
 
