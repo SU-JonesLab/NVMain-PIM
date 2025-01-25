@@ -133,6 +133,7 @@ SubArray::SubArray( )
     precharges = 0;
     refreshes = 0;
     overlapped_activates = 0;
+    single_row_activates = 0;
     double_row_activates = 0;
     triple_row_activates = 0;
     local_writes = 0;
@@ -294,6 +295,7 @@ void SubArray::RegisterStats( )
     AddStat(reads);
     AddStat(writes);
     AddStat(overlapped_activates);
+    AddStat(single_row_activates);
     AddStat(double_row_activates);
     AddStat(triple_row_activates);
     AddStat(local_writes);
@@ -410,6 +412,89 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
 
     return true;
 }
+
+bool SubArray::SingleRowActivate(NVMainRequest *request )
+{
+    uint64_t activateRow;
+
+    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, NULL );
+
+    /* Check if we need to cancel or pause a write to service this request. */
+    CheckWritePausing( );
+
+    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
+    /* sanity check */
+    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
+    {
+        std::cerr << "NVMain Error: SubArray violates ACTIVATION timing constraint!"
+            << std::endl;
+        return false;
+    }
+    else if( p->UsePrecharge && state != SUBARRAY_CLOSED )
+    {
+        std::cerr << "NVMain Error: try to open a subarray that is not idle!"
+            << std::endl;
+        return false;
+    }
+
+    /* Update timing constraints */
+    nextPrecharge = MAX( nextPrecharge, 
+                         GetEventQueue()->GetCurrentCycle() 
+                             + MAX( p->tRCD, p->tRAS ) );
+
+    nextRead = MAX( nextRead, 
+                    GetEventQueue()->GetCurrentCycle() 
+                        + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
+
+    nextWrite = MAX( nextWrite, 
+                     GetEventQueue()->GetCurrentCycle() 
+                         + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
+
+    nextPowerDown = MAX( nextPowerDown, 
+                         GetEventQueue()->GetCurrentCycle() 
+                             + MAX( p->tRCD, p->tRAS ) );
+
+    /* send event response back up */
+    GetEventQueue( )->InsertEvent( EventResponse, this, request, 
+                    GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH * (numShifts / wordSize) );
+
+    /* 
+     * The relative row number is record rather than the absolute row number 
+     * within the subarray
+     */
+    openRow = activateRow;
+
+    state = SUBARRAY_OPEN;
+    writeCycle = false;
+
+    lastActivate = GetEventQueue()->GetCurrentCycle();
+
+    /* Add to bank's total energy. */
+    if( p->EnergyModel == "current" )
+    {
+        /* DRAM Model */
+        ncycle_t tRC = p->tRAS + p->tRP;
+
+        subArrayEnergy += ( ( p->EIDD0 * (double)tRC ) 
+                    - ( ( p->EIDD3N * (double)(p->tRAS) )
+                    +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
+
+        activeEnergy += ( ( p->EIDD0 * (double)tRC ) 
+                      - ( ( p->EIDD3N * (double)(p->tRAS) )
+                      +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
+    }
+    else
+    {
+        /* Flat energy model. */
+        subArrayEnergy += p->Erd;
+        activeEnergy += p->Erd;
+    }
+
+    single_row_activates++;
+
+    return true;
+}
+
 
 bool SubArray::DoubleRowActivate(NVMainRequest *request )
 {
@@ -1770,6 +1855,9 @@ bool SubArray::IssueCommand( NVMainRequest *req )
                 break;
             case OA:
                 rv = this->OverlappedActivate( req );
+                break;
+            case SRA:
+                rv = this->SingleRowActivate( req );
                 break;
             case DRA:
                 rv = this->DoubleRowActivate( req );
