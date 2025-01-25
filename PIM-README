@@ -6,16 +6,20 @@ This is a README for the Processing In Memory (PIM) extension, which is built on
 
 The PIM extension introduces three new command types from the PIM command set:
 
-1. **Overlapped Activate (OA)**: This command allows for the activation of a row while another row is already active. This can be useful for cloning the contents of one row to another.
+1. **Overlapped Activate (OA)**: This command allows for the activation of a row while another row is already active. This can be useful for cloning the contents of one row to another. (RowClone Operation)
 
 2. **Triple Row Activate (TRA)**: This command activates three rows at once. This is meant to perform the majority operation on the 3 elements column-wise, across the row. State is not tracked in this simulator so we model energy and latency.
 
 3. **Double Row Activate (DRA)**: This command activates two rows at once. This command can be used in Ambit (DRAM) PIM or Pinatubo (RRAM) PIM.
     In order to simulate the sequential wordline driver for Pinatubo, need to add tRCD * #DRA to final timing.
 
-4. **Local Write (LW)**: This command writes the contents of the sense amps (SA) back into the address given using local write drivers.
+4. **Single Row Activate (SRA)**: This command activates a single row. Typically for PIM commands this will be some special row (ie DCC or Shift row).
 
-4. **RowClone_PSM**: This command is intended to clone a row in a PSM (Pipelined Serial Mode) manner. However, this feature is not yet implemented.
+The following have not yet been fully implemented ...
+
+5. **Local Write (LW)**: This command writes the contents of the sense amps (SA) back into the address given using local write drivers.
+
+6. **RowClone_PSM**: This command is intended to clone a row in a PSM (Pipelined Serial Mode) manner. However, this feature is not yet implemented.
 
 ## Results
 
