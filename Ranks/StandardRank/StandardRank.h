@@ -140,7 +140,8 @@ class StandardRank : public Rank
     ncounter_t actWaitTotal;
     double actWaitAverage;
 
-    ncounter_t reads, writes, overlapped_activates, double_row_activates, triple_row_activates;
+    ncounter_t reads, writes, overlapped_activates, 
+      single_row_activates, double_row_activates, triple_row_activates;
 
     double totalEnergy, backgroundEnergy, activateEnergy, burstEnergy, refreshEnergy;
     double totalPower, backgroundPower, activatePower, burstPower, refreshPower;
@@ -148,6 +149,7 @@ class StandardRank : public Rank
     bool Activate( NVMainRequest *request );
     bool Shift( NVMainRequest *request );
     bool OverlappedActivate( NVMainRequest *request );
+    bool SingleRowActivate( NVMainRequest *request );
     bool DoubleRowActivate( NVMainRequest *request );
     bool TripleRowActivate( NVMainRequest *request );
 

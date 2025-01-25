@@ -362,7 +362,7 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
     CheckWritePausing( );
     if(  state != SUBARRAY_OPEN )
     {
-        std::cerr << "NVMain Error: try to perform TRA on subarray that is not open!"
+        std::cerr << "NVMain Error: try to perform OA on subarray that is not open!"
             << std::endl;
         return false;
     }
@@ -1719,7 +1719,7 @@ bool SubArray::IsIssuable( NVMainRequest *req, FailReason *reason )
     if( nextCommand != CMD_NOP )
         return false;
 
-    if( req->type == ACTIVATE  || req->type == TRA || req->type == DRA)
+    if( req->type == ACTIVATE || req->type == TRA || req->type == DRA || req->type == SRA )
     {
         if( nextActivate > (GetEventQueue()->GetCurrentCycle()) /* if it is too early to open */
             || (p->UsePrecharge && state != SUBARRAY_CLOSED)   /* or, the subarray needs a precharge */
