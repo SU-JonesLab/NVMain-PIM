@@ -327,6 +327,34 @@ bool StandardRank::DoubleRowActivate(NVMainRequest *request )
     return true;
 }
 
+bool StandardRank::SingleRowActivate(NVMainRequest *request )
+{
+    uint64_t activateBank;
+
+    request->address.GetTranslatedAddress( NULL, NULL, &activateBank, NULL, NULL, NULL );
+
+    if( activateBank >= bankCount )
+    {
+        std::cerr << "Rank: Attempted to activate non-existant bank " << activateBank << std::endl;
+        return false;
+    }
+
+    if( state == STANDARDRANK_CLOSED )
+        state = STANDARDRANK_OPEN;
+    
+    /* issue SRA to target bank */
+    GetChild( request )->IssueCommand( request );
+
+    /* move to the next counter (optimistic PIM impact on RAW)*/
+    RAWindex = (RAWindex + 1) % rawNum;
+    lastActivate[RAWindex] = GetEventQueue()->GetCurrentCycle();
+    nextActivate = MAX( nextActivate, 
+                        GetEventQueue()->GetCurrentCycle() + p->tRRDR + p->tSH );
+
+    single_row_activates++;
+    return true;
+}
+
 bool StandardRank::OverlappedActivate( NVMainRequest *request )
 {
     uint64_t activateBank;
@@ -732,7 +760,8 @@ ncycle_t StandardRank::NextIssuable( NVMainRequest *request )
 
     request->address.GetTranslatedAddress( NULL, NULL, &bank, NULL, NULL, NULL );
 
-    if( request->type == ACTIVATE || request->type == REFRESH || request->type == DRA || request->type == TRA || request->type == OA) nextCompare = MAX( nextActivate, lastActivate[(RAWindex+1)%rawNum] + p->tRAW );
+    if( request->type == ACTIVATE || request->type == REFRESH || request->type == DRA || request->type == TRA || request->type == OA || request->type == SRA) 
+        nextCompare = MAX( nextActivate, lastActivate[(RAWindex+1)%rawNum] + p->tRAW );
     else if( request->type == READ || request->type == READ_PRECHARGE ) nextCompare = nextRead;
     else if( request->type == WRITE || request->type == WRITE_PRECHARGE ) nextCompare = nextWrite;
     else if( request->type == PRECHARGE || request->type == PRECHARGE_ALL ) nextCompare = nextPrecharge;
@@ -751,7 +780,7 @@ bool StandardRank::IsIssuable( NVMainRequest *req, FailReason *reason )
 
     rv = true;
 
-    if( req->type == ACTIVATE || req->type == DRA || req->type == TRA )
+    if( req->type == ACTIVATE || req->type == DRA || req->type == TRA || req->type == SRA )
     {
         if( nextActivate > GetEventQueue( )->GetCurrentCycle( ) 
             || ( lastActivate[(RAWindex + 1) % rawNum] + p->tRAW ) 
@@ -917,6 +946,9 @@ bool StandardRank::IssueCommand( NVMainRequest *req )
                 break;
             case OA:
                 rv = this->OverlappedActivate( req );
+                break;
+            case SRA:
+                rv = this->SingleRowActivate( req );
                 break;
             case DRA:
                 rv = this->DoubleRowActivate( req );

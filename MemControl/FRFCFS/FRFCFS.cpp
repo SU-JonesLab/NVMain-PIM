@@ -69,6 +69,7 @@ FRFCFS::FRFCFS( )
 
     mem_reads = 0;
     mem_writes = 0;
+    mem_SRAs = 0;
     mem_DRAs=0;
     mem_TRAs = 0; 
     mem_oAs = 0;
@@ -114,6 +115,7 @@ void FRFCFS::RegisterStats( )
 {
     AddStat(mem_reads);
     AddStat(mem_writes);
+    AddStat(mem_SRAs);
     AddStat(mem_DRAs);
     AddStat(mem_TRAs);
     AddStat(mem_oAs);
@@ -176,6 +178,8 @@ bool FRFCFS::IssueCommand( NVMainRequest *req )
         mem_oAs++;
     }else if(req->type == DRA){
         mem_DRAs++;
+    }else if(req->type == SRA){
+        mem_SRAs++;
     }
     /*
      *  Return whether the request could be queued. Return false if the queue is full.
@@ -274,7 +278,8 @@ void FRFCFS::Cycle( ncycle_t steps )
     /* Issue the commands for this transaction. */
     if( nextRequest != NULL )
     {   //handle PUM commands 
-        if (nextRequest->type == DRA || nextRequest->type == TRA || nextRequest->type == OA)
+        if (nextRequest->type == SRA || nextRequest->type == DRA 
+            || nextRequest->type == TRA || nextRequest->type == OA)
             IssuePIMCommands( nextRequest );
         else
             IssueMemoryCommands( nextRequest );

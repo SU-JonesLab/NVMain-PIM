@@ -410,7 +410,7 @@ bool NVMain::IssueCommand( NVMainRequest *request )
         {
             totalWriteRequests++;
         }
-        else if(request->type == TRA || request->type == OA || request->type == DRA)
+        else if(request->type == TRA || request->type == OA || request->type == DRA || request->type == SRA)
         {
             /* Translate address 2 for pim commands */
             GetDecoder( )->Translate( request->address2.GetPhysicalAddress( ), 
@@ -465,7 +465,7 @@ bool NVMain::IssueAtomic( NVMainRequest *request )
         {
             totalWriteRequests++;
         }
-        else if(request->type == TRA || request->type == OA || request->type == DRA)
+        else if(request->type == TRA || request->type == OA || request->type == DRA || request->type == SRA)
         {
             totalPIMRequests++;
         }
