@@ -166,7 +166,10 @@ class DDR3Bank : public Bank
 
     uint64_t averageEndurance, worstCaseEndurance;
 
-    ncounter_t reads, writes, activates, precharges, refreshes, overlapped_activates, double_row_activates, triple_row_activates;
+    ncounter_t reads, writes, activates, precharges, 
+      refreshes, overlapped_activates, single_row_activates,
+      double_row_activates, triple_row_activates;
+
     ncounter_t idleTimer;
 
     uint64_t openRow;
@@ -176,6 +179,7 @@ class DDR3Bank : public Bank
     virtual bool Activate( NVMainRequest *request );
     virtual bool Shift( NVMainRequest *request );
     virtual bool OverlappedActivate( NVMainRequest *request );
+    virtual bool SingleRowActivate( NVMainRequest *request );
     virtual bool DoubleRowActivate( NVMainRequest *request );
     virtual bool TripleRowActivate( NVMainRequest *request );
     virtual bool Read( NVMainRequest *request );

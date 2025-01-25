@@ -149,6 +149,8 @@ bool NVMainTraceReader::GetNextAccess( TraceLine *nextAccess )
                     operation = WRITE;
                 else if(field =="O" )
                     operation = OA;
+                else if(field == "S" )
+                    operation = SRA;
                 else if (field == "D" )
                     operation = DRA;
                 else if(field == "T" )
@@ -256,7 +258,7 @@ bool NVMainTraceReader::GetNextAccess( TraceLine *nextAccess )
 
     linenum++;
 
-    if( operation != READ && operation != WRITE && operation != TRA && operation != OA && operation != DRA )
+    if( operation != READ && operation != WRITE && operation != TRA && operation != OA && operation != DRA && operation != SRA)
         std::cout << "NVMainTraceReader: Unknown Operation: " << operation 
             << "Line number is " << linenum << ". Full Line is \"" << fullLine 
             << "\"" << std::endl;
