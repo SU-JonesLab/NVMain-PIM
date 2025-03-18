@@ -252,8 +252,9 @@ int TraceMain::RunTrace( int argc, char *argv[] )
                          tl->GetData( ), tl->GetOldData( ), tl->GetThreadId( ) );
 
         // TODO if we keep adding new operations, we should add a function in NVMainRequest to check if valid for trace
-        if( request->type != READ && request->type != WRITE && request->type != OA && request->type != TRA && 
-            request->type != DRA && request->type != SRA)
+        if( request->type != READ && request->type != WRITE && 
+            request->type != TRA && request->type != DRA && request->type != SRA &&
+            request->type != ODRA && request->type != OTRA && request->type != OA )
             std::cout << "traceMain: Unknown Operation: " << request->type 
                 << std::endl;
 

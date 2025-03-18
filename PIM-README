@@ -7,6 +7,8 @@ This is a README for the Processing In Memory (PIM) extension, which is built on
 The PIM extension introduces three new command types from the PIM command set:
 
 1. **Overlapped Activate (OA)**: This command allows for the activation of a row while another row is already active. This can be useful for cloning the contents of one row to another. (RowClone Operation)
+    1. **Overlapped Double Row Activate (ODRA)**
+    2. **Overlapped Triple Row Activate (OTRA)**
 
 2. **Triple Row Activate (TRA)**: This command activates three rows at once. This is meant to perform the majority operation on the 3 elements column-wise, across the row. State is not tracked in this simulator so we model energy and latency.
 
@@ -28,9 +30,9 @@ The following table compares the energy consumption for our implementation of ea
 | Operation | Energy Consumption Ambit (nJ/KB) | Energy Consumption Us (nJ/KB) | Percent Difference |
 | --- | --- | --- | --- |
 | NOT | 1.6 | 1.7 |  +6% |
-| AND | 3.2 | 3.17 | -1% |
-| NAND | 4.0 | 3.59 | -10% |
-| XOR | 5.5 | 5.24 | -5% |
+| AND | 3.2 | 3.59 | +12% |
+| NAND | 4.0 | 4.44| +11% |
+| XOR | 5.5 | 5.95 | +8% |
 
 Please note: The energy consumption for our implementation is based off the "2D_DRAM_example.config" which implements the Micron DDR3-1333_4Gb_8B_x8 memory chip, which has a row-size of 8KB.
 

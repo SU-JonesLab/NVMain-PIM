@@ -1240,7 +1240,8 @@ bool MemoryController::FindCachedAddress( std::list<NVMainRequest *>& transactio
     for( it = transactionQueue.begin(); it != transactionQueue.end(); it++ )
     {   
         // Skip transaction requests that are not READ or WRITE (PIM requests)
-        if((*it)->type == TRA || (*it)->type == OA || (*it)->type == DRA || (*it)->type == SRA)
+        if((*it)->type == TRA || (*it)->type == OA || (*it)->type == DRA || (*it)->type == SRA
+            || (*it)->type == ODRA || (*it)->type == OTRA)
             continue;
             
         ncounter_t queueId = GetCommandQueueId( (*it)->address );
@@ -1373,7 +1374,8 @@ bool MemoryController::FindRowBufferHit( std::list<NVMainRequest *>& transaction
     {
 
         // Skip transaction requests that are not READ or WRITE (PIM requests)
-        if((*it)->type == TRA || (*it)->type == OA || (*it)->type == DRA || (*it)->type == SRA)
+        if((*it)->type == TRA || (*it)->type == OA || (*it)->type == DRA || (*it)->type == SRA
+            || (*it)->type == ODRA || (*it)->type == OTRA)
             continue;
 
         ncounter_t rank, bank, row, subarray, col;
@@ -1604,7 +1606,7 @@ bool MemoryController::DummyPredicate::operator() ( NVMainRequest* /*request*/ )
  * 
 */
 bool MemoryController::IssuePIMCommands( NVMainRequest *req )
- {
+{
     bool rv = false;
     ncounter_t rank, bank, row, subarray, col;
     req->address.GetTranslatedAddress(&row, &col, &bank, &rank, NULL, &subarray);
@@ -1628,11 +1630,12 @@ bool MemoryController::IssuePIMCommands( NVMainRequest *req )
     ncounter_t queueId = GetCommandQueueId(req->address);
 
     //If not overlap, the subarray should not be active
-    if(activeSubArray[rank][bank][subarray] && req->type != OA)
+    if(activeSubArray[rank][bank][subarray] && (req->type == SRA || req->type == DRA ||  req->type == TRA)){
         commandQueues[queueId].push_back( MakePrechargeRequest( req ) );
+    }
 
     //If overlap, the subarray should be active
-    if(req->type == OA && !activeSubArray[rank][bank][subarray]){
+    if((req->type == OA || req->type == ODRA || req->type == OTRA) && !activeSubArray[rank][bank][subarray]){
         commandQueues[queueId].push_back( MakeActivateRequest( req ) );
     }
 
@@ -1649,7 +1652,7 @@ bool MemoryController::IssuePIMCommands( NVMainRequest *req )
     effectiveMuxedRow[rank][bank][subarray] = muxLevel;
 
     // add precharge after overlap activates to close subarray
-    if(req->type == OA){
+    if(req->type == OA || req->type == ODRA || req->type == OTRA){
         commandQueues[queueId].push_back( MakePrechargeRequest( req ) );
         activeSubArray[rank][bank][subarray] = false;
         activateQueued[rank][bank] = false;
@@ -1668,7 +1671,8 @@ bool MemoryController::IssuePIMCommands( NVMainRequest *req )
     if( rv == true )
         ScheduleCommandWake( );
     return rv;
- }
+
+}
 
 
 

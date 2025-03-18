@@ -83,6 +83,9 @@ StandardRank::StandardRank( )
     reads = 0;
     writes = 0;
     overlapped_activates = 0;
+    overlapped_double_row_activates = 0;
+    overlapped_triple_row_activates = 0;
+    single_row_activates = 0;
     double_row_activates = 0;
     triple_row_activates = 0;
 
@@ -234,6 +237,9 @@ void StandardRank::RegisterStats( )
     AddStat(reads);
     AddStat(writes);
     AddStat(overlapped_activates);
+    AddStat(overlapped_double_row_activates);
+    AddStat(overlapped_triple_row_activates);
+    AddStat(single_row_activates);
     AddStat(double_row_activates);
     AddStat(triple_row_activates);
 
@@ -271,7 +277,7 @@ bool StandardRank::Idle( )
     return rankIdle;
 }
 
-bool StandardRank::TripleRowActivate(NVMainRequest *request )
+bool StandardRank::MultiRowActivate(NVMainRequest *request )
 {
      uint64_t activateBank;
 
@@ -295,65 +301,27 @@ bool StandardRank::TripleRowActivate(NVMainRequest *request )
     nextActivate = MAX( nextActivate, 
                         GetEventQueue()->GetCurrentCycle() + p->tRRDR + p->tSH );
 
-    triple_row_activates++;
-    return true;
-}
-
-bool StandardRank::DoubleRowActivate(NVMainRequest *request )
-{
-    uint64_t activateBank;
-
-    request->address.GetTranslatedAddress( NULL, NULL, &activateBank, NULL, NULL, NULL );
-
-    if( activateBank >= bankCount )
+    switch (request->type)
     {
-        std::cerr << "Rank: Attempted to activate non-existant bank " << activateBank << std::endl;
-        return false;
+        case SRA:
+            single_row_activates++;
+            break;
+        case DRA:
+            double_row_activates++;
+            break;
+        case TRA:
+            triple_row_activates++;
+            break;
+        default:
+            std::cerr << "NVMain Error : MultiRowActivate unknown operation type "
+                        <<  request->type << std::endl;
+            return false;
+            break;
     }
 
-    if( state == STANDARDRANK_CLOSED )
-        state = STANDARDRANK_OPEN;
-    
-    /* issue ACTIVATE to target bank */
-    GetChild( request )->IssueCommand( request );
-
-    /* move to the next counter (optimistic PIM impact on RAW)*/
-    RAWindex = (RAWindex + 1) % rawNum;
-    lastActivate[RAWindex] = GetEventQueue()->GetCurrentCycle();
-    nextActivate = MAX( nextActivate, 
-                        GetEventQueue()->GetCurrentCycle() + p->tRRDR + p->tSH );
-
-    double_row_activates++;
     return true;
 }
 
-bool StandardRank::SingleRowActivate(NVMainRequest *request )
-{
-    uint64_t activateBank;
-
-    request->address.GetTranslatedAddress( NULL, NULL, &activateBank, NULL, NULL, NULL );
-
-    if( activateBank >= bankCount )
-    {
-        std::cerr << "Rank: Attempted to activate non-existant bank " << activateBank << std::endl;
-        return false;
-    }
-
-    if( state == STANDARDRANK_CLOSED )
-        state = STANDARDRANK_OPEN;
-    
-    /* issue SRA to target bank */
-    GetChild( request )->IssueCommand( request );
-
-    /* move to the next counter (optimistic PIM impact on RAW)*/
-    RAWindex = (RAWindex + 1) % rawNum;
-    lastActivate[RAWindex] = GetEventQueue()->GetCurrentCycle();
-    nextActivate = MAX( nextActivate, 
-                        GetEventQueue()->GetCurrentCycle() + p->tRRDR + p->tSH );
-
-    single_row_activates++;
-    return true;
-}
 
 bool StandardRank::OverlappedActivate( NVMainRequest *request )
 {
@@ -385,7 +353,22 @@ bool StandardRank::OverlappedActivate( NVMainRequest *request )
     nextActivate = MAX( nextActivate, 
                         GetEventQueue()->GetCurrentCycle() + p->tRRDR + p->tSH );
 
-    overlapped_activates++;
+    switch (request->type){
+        case OA:
+            overlapped_activates++;
+            break;
+        case ODRA:
+            overlapped_double_row_activates++;
+            break;
+        case OTRA:
+            overlapped_triple_row_activates++;
+            break;
+        default:
+            std::cerr << "NVMain Error : OverlappedActivate unknown operation type "
+                        <<  request->type << std::endl;
+            return false;
+            break;
+    }
     return true;
 }
 
@@ -760,7 +743,8 @@ ncycle_t StandardRank::NextIssuable( NVMainRequest *request )
 
     request->address.GetTranslatedAddress( NULL, NULL, &bank, NULL, NULL, NULL );
 
-    if( request->type == ACTIVATE || request->type == REFRESH || request->type == DRA || request->type == TRA || request->type == OA || request->type == SRA) 
+    if( request->type == ACTIVATE || request->type == REFRESH || request->type == DRA || request->type == TRA || 
+        request->type == OA || request->type == SRA || request->type == ODRA || request->type == OTRA ) 
         nextCompare = MAX( nextActivate, lastActivate[(RAWindex+1)%rawNum] + p->tRAW );
     else if( request->type == READ || request->type == READ_PRECHARGE ) nextCompare = nextRead;
     else if( request->type == WRITE || request->type == WRITE_PRECHARGE ) nextCompare = nextWrite;
@@ -820,9 +804,9 @@ bool StandardRank::IsIssuable( NVMainRequest *req, FailReason *reason )
             }
         }
     }
-    else if( req->type == OA )
+    else if( req->type == OA || req->type == ODRA || req->type == OTRA )
     {
-        rv = GetChild( req )->IsIssuable(req, reason);
+        rv = GetChild( req )->IsIssuable( req, reason );
     }
     else if( req->type == SHIFT )
     {
@@ -945,16 +929,14 @@ bool StandardRank::IssueCommand( NVMainRequest *req )
                 rv = this->Shift( req );
                 break;
             case OA:
+            case ODRA:
+            case OTRA:
                 rv = this->OverlappedActivate( req );
                 break;
             case SRA:
-                rv = this->SingleRowActivate( req );
-                break;
             case DRA:
-                rv = this->DoubleRowActivate( req );
-                break;
             case TRA:
-                rv = this->TripleRowActivate( req );
+                rv = this->MultiRowActivate( req );
                 break;
 
             case READ:

@@ -133,6 +133,8 @@ SubArray::SubArray( )
     precharges = 0;
     refreshes = 0;
     overlapped_activates = 0;
+    overlapped_double_row_activates = 0;
+    overlapped_triple_row_activates = 0;
     single_row_activates = 0;
     double_row_activates = 0;
     triple_row_activates = 0;
@@ -295,6 +297,8 @@ void SubArray::RegisterStats( )
     AddStat(reads);
     AddStat(writes);
     AddStat(overlapped_activates);
+    AddStat(overlapped_double_row_activates);
+    AddStat(overlapped_triple_row_activates);
     AddStat(single_row_activates);
     AddStat(double_row_activates);
     AddStat(triple_row_activates);
@@ -391,29 +395,51 @@ bool SubArray::OverlappedActivate( NVMainRequest *request ){
 
     lastActivate = GetEventQueue()->GetCurrentCycle();
 
+    double scale;
+
+    switch(request->type)
+    {
+        case OA:
+            scale = 1.0;
+            overlapped_activates++;
+            break;
+        case ODRA:
+            scale = 1.22;
+            overlapped_double_row_activates++;
+            break;
+        case OTRA:
+            scale = 1.44;
+            overlapped_triple_row_activates++;
+            break;
+        default:
+            scale = 1.0;
+            std::cerr << "NVMain Error : MultiRowActivate unknown operation type "
+                        <<  request->type << std::endl;
+            break;
+    }
+
     /* Add to bank's total energy. */
     if( p->EnergyModel == "current" )
     {
         /* DRAM Model */
         double tRC = (double) p->tRCD;
 
-        subArrayEnergy += ( (p->EIDD0 * tRC) - (p->EIDD3N *tRC) ) / (double)(p->BANKS); //active energy - idle energy
+        subArrayEnergy += scale * ( (p->EIDD0 * tRC) - (p->EIDD3N *tRC) ) / (double)(p->BANKS); //active energy - idle energy
 
-        activeEnergy += ( (p->EIDD0 * tRC) - (p->EIDD3N *tRC) ) / (double)(p->BANKS); //active energy - idle energy
+        activeEnergy += scale * ( (p->EIDD0 * tRC) - (p->EIDD3N *tRC) ) / (double)(p->BANKS); //active energy - idle energy
     }
     else
     {
         /* Flat energy model. */
-        subArrayEnergy += p->Erd; 
-        activeEnergy += p->Erd;
+        subArrayEnergy += scale * p->Erd; 
+        activeEnergy += scale * p->Erd;
     }
 
-    overlapped_activates++;
 
     return true;
 }
 
-bool SubArray::SingleRowActivate(NVMainRequest *request )
+bool SubArray::MultiRowActivate(NVMainRequest *request )
 {
     uint64_t activateRow;
 
@@ -469,88 +495,28 @@ bool SubArray::SingleRowActivate(NVMainRequest *request )
 
     lastActivate = GetEventQueue()->GetCurrentCycle();
 
-    /* Add to bank's total energy. */
-    if( p->EnergyModel == "current" )
+    double scale;
+
+    switch(request->type)
     {
-        /* DRAM Model */
-        ncycle_t tRC = p->tRAS + p->tRP;
-
-        subArrayEnergy += ( ( p->EIDD0 * (double)tRC ) 
-                    - ( ( p->EIDD3N * (double)(p->tRAS) )
-                    +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
-
-        activeEnergy += ( ( p->EIDD0 * (double)tRC ) 
-                      - ( ( p->EIDD3N * (double)(p->tRAS) )
-                      +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
+        case SRA:
+            scale = 1.0;
+            single_row_activates++;
+            break;
+        case DRA:
+            scale = 1.22;
+            double_row_activates++;
+            break;
+        case TRA:
+            scale = 1.44;
+            triple_row_activates++;
+            break;
+        default:
+            scale = 1.0;
+            std::cerr << "NVMain Error : MultiRowActivate unknown operation type "
+                        <<  request->type << std::endl;
+            break;
     }
-    else
-    {
-        /* Flat energy model. */
-        subArrayEnergy += p->Erd;
-        activeEnergy += p->Erd;
-    }
-
-    single_row_activates++;
-
-    return true;
-}
-
-
-bool SubArray::DoubleRowActivate(NVMainRequest *request )
-{
-    uint64_t activateRow;
-
-    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, NULL );
-
-    /* Check if we need to cancel or pause a write to service this request. */
-    CheckWritePausing( );
-
-    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
-    /* sanity check */
-    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
-    {
-        std::cerr << "NVMain Error: SubArray violates ACTIVATION timing constraint!"
-            << std::endl;
-        return false;
-    }
-    else if( p->UsePrecharge && state != SUBARRAY_CLOSED )
-    {
-        std::cerr << "NVMain Error: try to open a subarray that is not idle!"
-            << std::endl;
-        return false;
-    }
-
-    /* Update timing constraints */
-    nextPrecharge = MAX( nextPrecharge, 
-                         GetEventQueue()->GetCurrentCycle() 
-                             + MAX( p->tRCD, p->tRAS ) );
-
-    nextRead = MAX( nextRead, 
-                    GetEventQueue()->GetCurrentCycle() 
-                        + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
-
-    nextWrite = MAX( nextWrite, 
-                     GetEventQueue()->GetCurrentCycle() 
-                         + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
-
-    nextPowerDown = MAX( nextPowerDown, 
-                         GetEventQueue()->GetCurrentCycle() 
-                             + MAX( p->tRCD, p->tRAS ) );
-
-    /* send event response back up */
-    GetEventQueue( )->InsertEvent( EventResponse, this, request, 
-                    GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH * (numShifts / wordSize) );
-
-    /* 
-     * The relative row number is record rather than the absolute row number 
-     * within the subarray
-     */
-    openRow = activateRow;
-
-    state = SUBARRAY_OPEN;
-    writeCycle = false;
-
-    lastActivate = GetEventQueue()->GetCurrentCycle();
 
     /* Add to bank's total energy. */
     if( p->EnergyModel == "current" )
@@ -558,105 +524,20 @@ bool SubArray::DoubleRowActivate(NVMainRequest *request )
         /* DRAM Model */
         ncycle_t tRC = p->tRAS + p->tRP;
 
-        subArrayEnergy += 1.22 * ( ( p->EIDD0 * (double)tRC ) 
+        subArrayEnergy += scale * ( ( p->EIDD0 * (double)tRC ) 
                     - ( ( p->EIDD3N * (double)(p->tRAS) )
                     +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
 
-        activeEnergy += 1.22 * ( ( p->EIDD0 * (double)tRC ) 
+        activeEnergy += scale * ( ( p->EIDD0 * (double)tRC ) 
                       - ( ( p->EIDD3N * (double)(p->tRAS) )
                       +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
     }
     else
     {
         /* Flat energy model. */
-        subArrayEnergy += 1.22 * p->Erd;
-        activeEnergy += 1.22 * p->Erd;
+        subArrayEnergy += scale * p->Erd;
+        activeEnergy += scale * p->Erd;
     }
-
-    double_row_activates++;
-
-    return true;
-}
-
-
-bool SubArray::TripleRowActivate( NVMainRequest *request )
-{
-    uint64_t activateRow;
-
-    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, NULL );
-
-    /* Check if we need to cancel or pause a write to service this request. */
-    CheckWritePausing( );
-
-    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
-    /* sanity check */
-    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
-    {
-        std::cerr << "NVMain Error: SubArray violates ACTIVATION timing constraint!"
-            << std::endl;
-        return false;
-    }
-    else if( p->UsePrecharge && state != SUBARRAY_CLOSED )
-    {
-        std::cerr << "NVMain Error: try to open a subarray that is not idle!"
-            << std::endl;
-        return false;
-    }
-
-    /* Update timing constraints */
-    nextPrecharge = MAX( nextPrecharge, 
-                         GetEventQueue()->GetCurrentCycle() 
-                             + MAX( p->tRCD, p->tRAS ) );
-
-    nextRead = MAX( nextRead, 
-                    GetEventQueue()->GetCurrentCycle() 
-                        + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
-
-    nextWrite = MAX( nextWrite, 
-                     GetEventQueue()->GetCurrentCycle() 
-                         + p->tRCD - p->tAL + p->tSH * (numShifts / wordSize) );
-
-    nextPowerDown = MAX( nextPowerDown, 
-                         GetEventQueue()->GetCurrentCycle() 
-                             + MAX( p->tRCD, p->tRAS ) );
-
-    /* send event response back up */
-    GetEventQueue( )->InsertEvent( EventResponse, this, request, 
-                    GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH * (numShifts / wordSize) );
-
-    /* 
-     * The relative row number is record rather than the absolute row number 
-     * within the subarray
-     */
-    openRow = activateRow;
-
-    state = SUBARRAY_OPEN;
-    writeCycle = false;
-
-    lastActivate = GetEventQueue()->GetCurrentCycle();
-
-    /* Add to bank's total energy. */
-    if( p->EnergyModel == "current" )
-    {
-        /* DRAM Model */
-        ncycle_t tRC = p->tRAS + p->tRP;
-
-        subArrayEnergy += 1.44 * ( ( p->EIDD0 * (double)tRC ) 
-                    - ( ( p->EIDD3N * (double)(p->tRAS) )
-                    +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
-
-        activeEnergy += 1.44 * ( ( p->EIDD0 * (double)tRC ) 
-                      - ( ( p->EIDD3N * (double)(p->tRAS) )
-                      +  ( p->EIDD2N * (double)(p->tRP) ) ) ) / (double)(p->BANKS);
-    }
-    else
-    {
-        /* Flat energy model. */
-        subArrayEnergy += 1.44 * p->Erd;
-        activeEnergy += 1.44 * p->Erd;
-    }
-
-    triple_row_activates++;
 
     return true;
 }
@@ -1741,7 +1622,7 @@ bool SubArray::IsIssuable( NVMainRequest *req, FailReason *reason )
             }
         }
     }
-    else if ( req->type == OA )
+    else if ( req->type == OA || req->type == ODRA || req->type == OTRA )
     {
         if( state != SUBARRAY_OPEN  /* the subarray is not active */
             || ( p->WritePausing && isWriting && writeRequest->flags & NVMainRequest::FLAG_FORCED ) ) /* or, write can't be paused. */
@@ -1854,16 +1735,14 @@ bool SubArray::IssueCommand( NVMainRequest *req )
                 rv = this->Shift( req );
                 break;
             case OA:
+            case ODRA:
+            case OTRA:
                 rv = this->OverlappedActivate( req );
                 break;
             case SRA:
-                rv = this->SingleRowActivate( req );
-                break;
             case DRA:
-                rv = this->DoubleRowActivate( req );
-                break;
             case TRA:
-                rv = this->TripleRowActivate( req );
+                rv = this->MultiRowActivate( req );
                 break;
             case READ:
             case READ_PRECHARGE:
