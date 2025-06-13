@@ -75,6 +75,8 @@ enum OpType
     TRA, /*Triple Row Activate primitive for PIM in DRAM/Pinatubo*/
     DRA, /*Double Row Activate primitive for PIM in DRAM/Pinatubo*/
     OA, /*Overlapped Activate primitive for PIM in DRAM*/
+    ODRA, /*Overlapped Double Row Activate primitive for PIM in DRAM*/
+    OTRA, /*Overlapped Triple Row Activate primitive for PIM in DRAM*/
     LW, /*Local Write primitive for PIM in DRAM*/
     ROWCLONE_PSM /*Row Clone PSM primitive for PIM in DRAM (not implemented yet) */
 };

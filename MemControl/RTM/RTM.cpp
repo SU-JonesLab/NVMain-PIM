@@ -287,7 +287,8 @@ void RTM::Cycle( ncycle_t steps )
     /* Issue the commands for this transaction. */
     if( nextRequest != NULL )
     {
-        if (nextRequest->type == TRA || nextRequest->type == OA || nextRequest->type == DRA)
+        if (nextRequest->type == TRA || nextRequest->type == OA || nextRequest->type == DRA ||
+            nextRequest->type == SRA || nextRequest->type == ODRA || nextRequest->type == OTRA)
             IssuePIMCommands( nextRequest );
         else 
             IssueMemoryCommands( nextRequest );

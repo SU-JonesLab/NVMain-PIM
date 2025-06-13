@@ -115,6 +115,8 @@ DDR3Bank::DDR3Bank( )
     precharges = 0;
     refreshes = 0;
     overlapped_activates = 0;
+    overlapped_double_row_activates = 0;
+    overlapped_triple_row_activates = 0;
     single_row_activates = 0;
     double_row_activates = 0;
     triple_row_activates = 0;
@@ -215,6 +217,8 @@ void DDR3Bank::RegisterStats( )
     AddStat(precharges);
     AddStat(refreshes);
     AddStat(overlapped_activates);
+    AddStat(overlapped_double_row_activates);
+    AddStat(overlapped_triple_row_activates);
     AddStat(single_row_activates);
     AddStat(double_row_activates);
     AddStat(triple_row_activates);
@@ -362,19 +366,34 @@ bool DDR3Bank::OverlappedActivate( NVMainRequest *request )
         openRow = activateRow;
         state = DDR3BANK_OPEN;
         activeSubArrayQueue.push_front( activateSubArray );
-        overlapped_activates++;
+        switch (request->type)
+        {
+            case OA:
+                overlapped_activates++;
+                break;
+            case ODRA:
+                overlapped_double_row_activates++;
+                break;
+            case OTRA:
+                overlapped_triple_row_activates++;
+                break;
+            default:
+                std::cerr << "NVMain Error : OverlappedActivate unknown operation type "
+                            <<  request->type << std::endl;
+                break;
+        }
     }
     else
     {
         std::cerr << "NVMain Error: Bank " << bankId << " failed to "
-            << "activate the subarray " << activateSubArray << std::endl;
+            << "overlappedactivate the subarray " << activateSubArray << std::endl;
     }
 
     return success;
 
 }
 
-bool DDR3Bank::SingleRowActivate( NVMainRequest *request )
+bool DDR3Bank::MultiRowActivate( NVMainRequest *request )
 {
     /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
     /* sanity check */
@@ -416,120 +435,27 @@ bool DDR3Bank::SingleRowActivate( NVMainRequest *request )
         openRow = activateRow;
         state = DDR3BANK_OPEN;
         activeSubArrayQueue.push_front( activateSubArray );
-        single_row_activates++;
-    }
-    else
-    {
-        std::cerr << "NVMain Error: Bank " << bankId << " failed to "
-            << "activate the subarray " << activateSubArray << std::endl;
-    }
-
-    return success;
-
-}
-
-bool DDR3Bank::DoubleRowActivate( NVMainRequest *request )
-{
-    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
-    /* sanity check */
-    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
-    {
-        std::cerr << "NVMain Error: Bank violates DRA timing constraint!"
-            << std::endl;
-        return false;
-    }
-    else if( state != DDR3BANK_CLOSED )
-    {
-        /*
-         * it means no subarray is active when activeSubArrayQueue is empty.
-         * therefore, the bank state must be idle rather than active. Actually,
-         * there are other conditions that the ACTIVATE cannot be issued. But 
-         * we leave the work for subarray so that we don't check here.
-         */
-        if( activeSubArrayQueue.empty( ) )
+        switch (request->type)
         {
-            std::cerr << "NVMain Error: try to open a bank that is not idle!"
-                << std::endl;
-            return false;
+            case SRA:
+                single_row_activates++;
+                break;
+            case DRA:
+                double_row_activates++;
+                break;
+            case TRA:
+                triple_row_activates++;
+                break;
+            default:
+                std::cerr << "NVMain Error : MultiRowActivate unknown operation type "
+                            <<  request->type << std::endl;
+                break;
         }
     }
-
-    ncounter_t activateRow, activateSubArray;
-    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, &activateSubArray );
-
-    /* update the timing constraints */
-    nextPowerDown = MAX( nextPowerDown, 
-                         GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH );
-
-    /* issue ACTIVATE to the target subarray */
-    bool success = GetChild( request )->IssueCommand( request );
-
-    if( success )
-    {
-        /* bank-level update */
-        openRow = activateRow;
-        state = DDR3BANK_OPEN;
-        activeSubArrayQueue.push_front( activateSubArray );
-        double_row_activates++;
-    }
     else
     {
         std::cerr << "NVMain Error: Bank " << bankId << " failed to "
-            << "activate the subarray " << activateSubArray << std::endl;
-    }
-
-    return success;
-
-}
-
-bool DDR3Bank::TripleRowActivate( NVMainRequest *request )
-{
-    /* TODO: Can we remove this sanity check and totally trust IsIssuable()? */
-    /* sanity check */
-    if( nextActivate > GetEventQueue()->GetCurrentCycle() )
-    {
-        std::cerr << "NVMain Error: Bank violates TRA timing constraint!"
-            << std::endl;
-        return false;
-    }
-    else if( state != DDR3BANK_CLOSED )
-    {
-        /*
-         * it means no subarray is active when activeSubArrayQueue is empty.
-         * therefore, the bank state must be idle rather than active. Actually,
-         * there are other conditions that the ACTIVATE cannot be issued. But 
-         * we leave the work for subarray so that we don't check here.
-         */
-        if( activeSubArrayQueue.empty( ) )
-        {
-            std::cerr << "NVMain Error: try to open a bank that is not idle!"
-                << std::endl;
-            return false;
-        }
-    }
-
-    ncounter_t activateRow, activateSubArray;
-    request->address.GetTranslatedAddress( &activateRow, NULL, NULL, NULL, NULL, &activateSubArray );
-
-    /* update the timing constraints */
-    nextPowerDown = MAX( nextPowerDown, 
-                         GetEventQueue()->GetCurrentCycle() + p->tRCD + p->tSH );
-
-    /* issue ACTIVATE to the target subarray */
-    bool success = GetChild( request )->IssueCommand( request );
-
-    if( success )
-    {
-        /* bank-level update */
-        openRow = activateRow;
-        state = DDR3BANK_OPEN;
-        activeSubArrayQueue.push_front( activateSubArray );
-        triple_row_activates++;
-    }
-    else
-    {
-        std::cerr << "NVMain Error: Bank " << bankId << " failed to "
-            << "activate the subarray " << activateSubArray << std::endl;
+            << "multirowactivate the subarray " << activateSubArray << std::endl;
     }
 
     return success;
@@ -964,7 +890,7 @@ bool DDR3Bank::IsIssuable( NVMainRequest *req, FailReason *reason )
     if( nextCommand != CMD_NOP )
         return false;
       
-    if( req->type == ACTIVATE || req->type == TRA || req->type == DRA )
+    if( req->type == ACTIVATE || req->type == TRA || req->type == DRA || req->type == SRA )
     {
         /* if the bank-level nextActive is not satisfied, cannot issue */
         if( nextActivate > ( GetEventQueue()->GetCurrentCycle() ) 
@@ -983,7 +909,7 @@ bool DDR3Bank::IsIssuable( NVMainRequest *req, FailReason *reason )
             rv = GetChild( req )->IsIssuable( req, reason );
         }
     }
-    else if( req->type == OA )
+    else if( req->type == OA || req->type == ODRA || req->type == OTRA )
     {
         if( state != DDR3BANK_OPEN  )
         {
@@ -1145,20 +1071,16 @@ bool DDR3Bank::IssueCommand( NVMainRequest *req )
                 break;
 
             case OA:
+            case ODRA:
+            case OTRA:
                 rv = this->OverlappedActivate( req );
                 break;
 
             case SRA:
-                rv = this->SingleRowActivate( req );
-                break;
-
             case DRA:
-                rv = this->DoubleRowActivate( req );
-                break;
-
             case TRA:
-                rv = this->TripleRowActivate( req );
-                break; 
+                rv = this->MultiRowActivate( req );
+                break;
 
             case SHIFT:
                 rv = this->Shift( req );

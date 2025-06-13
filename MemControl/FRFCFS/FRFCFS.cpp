@@ -180,6 +180,10 @@ bool FRFCFS::IssueCommand( NVMainRequest *req )
         mem_DRAs++;
     }else if(req->type == SRA){
         mem_SRAs++;
+    }else if(req->type == ODRA){
+        mem_DRAs++;
+    }else if(req->type == OTRA){
+        mem_TRAs++;
     }
     /*
      *  Return whether the request could be queued. Return false if the queue is full.
@@ -279,7 +283,8 @@ void FRFCFS::Cycle( ncycle_t steps )
     if( nextRequest != NULL )
     {   //handle PUM commands 
         if (nextRequest->type == SRA || nextRequest->type == DRA 
-            || nextRequest->type == TRA || nextRequest->type == OA)
+            || nextRequest->type == TRA || nextRequest->type == OA 
+            || nextRequest->type == ODRA || nextRequest->type == OTRA)
             IssuePIMCommands( nextRequest );
         else
             IssueMemoryCommands( nextRequest );
