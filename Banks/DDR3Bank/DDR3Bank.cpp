@@ -365,7 +365,20 @@ bool DDR3Bank::OverlappedActivate( NVMainRequest *request )
         /* bank-level update */
         openRow = activateRow;
         state = DDR3BANK_OPEN;
-        activeSubArrayQueue.push_front( activateSubArray );
+
+        bool alreadyActive = false;
+        for( std::deque<ncounter_t>::iterator it = activeSubArrayQueue.begin();
+                it != activeSubArrayQueue.end(); ++it )
+        {
+            if( (*it) == activateSubArray )
+            {
+                alreadyActive = true;
+                break;
+            }
+        }
+        if( !alreadyActive )
+            activeSubArrayQueue.push_front( activateSubArray );
+
         switch (request->type)
         {
             case OA:
@@ -434,7 +447,20 @@ bool DDR3Bank::MultiRowActivate( NVMainRequest *request )
         /* bank-level update */
         openRow = activateRow;
         state = DDR3BANK_OPEN;
-        activeSubArrayQueue.push_front( activateSubArray );
+
+        bool alreadyActive = false;
+        for( std::deque<ncounter_t>::iterator it = activeSubArrayQueue.begin();
+                it != activeSubArrayQueue.end(); ++it )
+        {
+            if( (*it) == activateSubArray )
+            {
+                alreadyActive = true;
+                break;
+            }
+        }
+        if( !alreadyActive )
+            activeSubArrayQueue.push_front( activateSubArray );
+
         switch (request->type)
         {
             case SRA:

@@ -7,4 +7,6 @@ log/
 *.debug
 *tmp*
 
+*.out
+*.py
 
