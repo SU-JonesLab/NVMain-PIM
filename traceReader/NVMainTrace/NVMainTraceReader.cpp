@@ -149,16 +149,18 @@ bool NVMainTraceReader::GetNextAccess( TraceLine *nextAccess )
                     operation = WRITE;
                 else if(field =="O" )
                     operation = OA;
-                else if(field == "S" )
+                else if(field == "S" || field == "SRA" )
                     operation = SRA;
-                else if (field == "D" )
+                else if (field == "D" || field == "DRA" )
                     operation = DRA;
-                else if(field == "T" )
+                else if(field == "T" || field == "TRA" )
                     operation = TRA;
                 else if (field == "ODRA" )
                     operation = ODRA;
                 else if(field == "OTRA" )
                     operation = OTRA;
+                else if(field == "oSRA" )
+                    operation = OA;  /* Overlapped Single Row Activate */
                 else if(field == "ROWCLONE_PSM" )
                     operation = ROWCLONE_PSM;
                 else
@@ -289,7 +291,17 @@ bool NVMainTraceReader::GetNextAccess( TraceLine *nextAccess )
         return true;
     }
 
-    nextAccess->SetLine( nAddress, operation, cycle, dataBlock, oldDataBlock, threadId );
+    /* OA and TRA require address2; if trace has only one address, use it for both
+     * so the "same subarray" check passes (avoids crash on single-address traces).
+     */
+    if( operation == OA || operation == TRA ){
+        NVMAddress nAddress2;
+        nAddress2.SetPhysicalAddress( address );
+        nextAccess->SetLine( nAddress, nAddress2, operation, cycle, dataBlock, oldDataBlock, threadId );
+    }
+    else{
+        nextAccess->SetLine( nAddress, operation, cycle, dataBlock, oldDataBlock, threadId );
+    }
 
     return true;
 }
